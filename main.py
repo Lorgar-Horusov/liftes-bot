@@ -10,7 +10,7 @@ from nacl.hash import blake2b
 from nacl.encoding import HexEncoder
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, \
-    ReplyKeyboardMarkup, KeyboardButton
+    ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, \
     filters, CallbackContext, CallbackQueryHandler
 
@@ -44,7 +44,8 @@ def generate_salt() -> None:
             salt = secrets.token_hex(32)
             set_key(dotenv_path='.env', key_to_set="SALT", value_to_set=salt)
             logger.info('Salt created')
-        logger.info('the salt has already been created')
+        else:
+            logger.info('the salt has already been created')
     except Exception as e:
         logger.error(f'Err\n{e}')
 
@@ -83,6 +84,7 @@ async def start(update: Update, context: CallbackContext) -> None:
         await context.bot.send_message(chat_id=update.effective_chat.id,
                                        text='Пожалуйста, отправьте ваш номер телефона.',
                                        reply_markup=reply_markup)
+
     else:
         await show_main_menu(update, context)
 
@@ -124,7 +126,8 @@ async def contact_handler(update: Update, context: CallbackContext) -> None:
     phone_number = contact.phone_number
     add_new_user(str(update.effective_chat.id), phone_number)
     response_message = 'Спасибо за авторизацию!'
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=response_message)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=response_message,
+                                   reply_markup=ReplyKeyboardRemove())
     await show_main_menu(update, context)
 
 
@@ -157,4 +160,3 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-    
