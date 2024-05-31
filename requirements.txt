@@ -1,0 +1,4 @@
+python-dotenv
+nacl
+python-telegram-bot
+argparse
