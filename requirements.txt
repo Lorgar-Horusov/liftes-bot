@@ -1,4 +1,5 @@
 python-dotenv
-nacl
+pynacl
 python-telegram-bot
 argparse
+requests
