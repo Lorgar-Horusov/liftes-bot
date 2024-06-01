@@ -1,10 +1,12 @@
 import sqlite3
-import os
 import secrets
 import argparse
 import logging
+import sys
 
-from dotenv import load_dotenv, set_key
+import keyring
+
+from dotenv import load_dotenv
 
 from nacl.hash import blake2b
 from nacl.encoding import HexEncoder
@@ -15,8 +17,8 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, \
     filters, CallbackContext, CallbackQueryHandler
 
 load_dotenv()
-TOKEN = os.getenv('TELEGRAM_TOKEN')
-SALT = os.getenv("SALT")
+TOKEN = keyring.get_password('liftes_bot', 'telegram_token')
+SALT = keyring.get_password('liftes_bot', 'salt')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('OwO logger')
 
@@ -37,17 +39,18 @@ def create_table() -> None:
 
 
 def generate_salt() -> None:
-    try:
-        salt = SALT
-        if not salt:
-            logger.info('Create Salt')
+    while True:
+        confirm = input('Are you sure you want to generate a new salt?'
+                        ' This will cause the database to become inaccessible y/n: ')
+        if confirm.lower() == 'y':
             salt = secrets.token_hex(32)
-            set_key(dotenv_path='.env', key_to_set="SALT", value_to_set=salt)
-            logger.info('Salt created')
+            keyring.set_password('liftes_bot', 'salt', salt)
+            logger.info('Соль сгенерирована и сохранена')
+            break
+        elif confirm.lower() == 'n':
+            sys.exit()
         else:
-            logger.info('the salt has already been created')
-    except Exception as e:
-        logger.error(f'Err\n{e}')
+            print("Invalid input. Please enter 'y' for yes or 'n' for no.")
 
 
 def add_new_user(telegram_id: str, user_phone: str) -> None:
