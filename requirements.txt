@@ -1,5 +1,6 @@
-python-dotenv
+python-dotenv~=1.0.1
 pynacl
 python-telegram-bot
-argparse
+argparse~=1.4.0
 requests
+keyring~=25.2.1
