@@ -151,8 +151,12 @@ async def button_handler(update: Update, context: CallbackContext) -> None:
         phone = get_user_phone(str(update.effective_chat.id))
         if phone is not None:
             client_info = ClientInfo(phone)
-            await context.bot.send_message(chat_id=update.effective_chat.id,
-                                           text=f'ваш адрес \n{client_info.address}')
+            if client_info.access:
+                await context.bot.send_message(chat_id=update.effective_chat.id,
+                                               text=f'ваш адрес \n{client_info.address}')
+            else:
+                await context.bot.send_message(chat_id=update.effective_chat.id,
+                                               text='Вашего адреса нет в базе данных, пожалуйста отправьте адрес\n(coming soon)')
         else:
             await context.bot.send_message(chat_id=update.effective_chat.id,
                                            text='Пользователь с таким ID не найден в базе данных')
