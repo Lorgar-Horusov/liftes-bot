@@ -11,7 +11,14 @@ class ClientInfo:
         self.phone_number = phone_number
         self._address = None
         self._name = None
-
+        self._access = False
+    
+    @property
+    def access(self):
+        if not self._access:
+            self._access = self._user_request().get('status')
+        return self._access
+    
     @property
     def address(self):
         if not self._address:
