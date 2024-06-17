@@ -1,6 +1,7 @@
 import requests
 import logging
 import keyring
+from database import error_logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('OwO logger')
@@ -12,13 +13,13 @@ class ClientInfo:
         self._address = None
         self._name = None
         self._access = False
-    
+
     @property
     def access(self):
         if not self._access:
             self._access = self._user_request().get('status')
         return self._access
-    
+
     @property
     def address(self):
         if not self._address:
@@ -58,8 +59,12 @@ class ClientInfo:
             return {"error": str(e)}
 
 
+
 if __name__ == '__main__':
-    phone = input('phone: ')
-    client_info = ClientInfo(phone)
-    print(client_info.name)
-    print(client_info.address)
+    try:
+        phone = input('phone: ')
+        client_info = ClientInfo(phone)
+        print(client_info.name)
+        print(client_info.address)
+    except Exception as e:
+        error_logging(e)
