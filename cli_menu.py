@@ -1,4 +1,5 @@
 import sys
+import threading
 
 import keyring
 import os
@@ -10,6 +11,8 @@ from InquirerPy import inquirer
 from InquirerPy.validator import EmptyInputValidator
 from nacl.secret import SecretBox
 from nacl.utils import random
+from database import error_logging, create_error_logging_table, create_table
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('OwO logger')
@@ -23,10 +26,15 @@ def clear() -> None:
 
 
 def pause() -> None:
-    if os.name == 'nt':
-        os.system('pause')
-    elif os.name == 'posix':
-        os.system('read -n1 -r -p "Нажмите любую клавишу, чтобы продолжить..." key')
+    try:
+        if os.name == 'nt':
+            os.system('pause')
+        elif os.name == 'posix':
+            print("Нажмите любую клавишу, чтобы продолжить...", end='', flush=True)
+            sys.stdin.read(1)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        error_logging(e)
 
 
 def python_execute(command: str) -> None:
@@ -43,7 +51,8 @@ def setting() -> None:
             message="Выберите пункт",
             choices=["Настройки токена",
                      "Настройки ключа",
-                     "Настройки API",
+                     "Настройки API сервера",
+                     "Настройки журнала ошибок",
                      "Настройки языка (coming soon)",
                      "Создать БД",
                      "Назад"],
@@ -55,10 +64,60 @@ def setting() -> None:
                 key_setting()
             case "Создать БД":
                 create_bd()
-            case "Настройки API":
-                api_setting()
+            case "Настройки журнала ошибок":
+                logger_setting()
+            case "Настройки API сервера":
+                server_api_setting()
             case _:
                 main()
+
+
+def logger_setting():
+    while True:
+        clear()
+        sub_menu = inquirer.select(
+            message='Выберите пункт',
+            choices=[
+                "Настройки токена",
+                "включить API журнала ошибок",
+                "Назад"
+            ]
+        ).execute()
+        match sub_menu:
+            case "Настройки токена":
+                logger_token_setting()
+            case "включить API журнала ошибок":
+                threading.Thread(target=python_execute('Error_logger.py')).start()
+            case _:
+                setting()
+
+
+def logger_token_setting():
+    clear()
+    sub_menu = inquirer.select(
+        message='Выберите пункт',
+        choices=[
+            "Генерация токена",
+            "просмотр токена",
+            "Назад"
+        ]
+    ).execute()
+    match sub_menu:
+        case "Генерация токена":
+            confirm = inquirer.confirm(
+                message="вы уверены старый токен станет недоступен",
+                default=False
+            ).execute()
+            if confirm:
+                new_api = os.urandom(32)
+                keyring.set_password('liftes-bot', 'logger_token', new_api.hex())
+                logger.info(new_api.hex())
+                pause()
+        case "просмотр токена":
+            logger.info(keyring.get_password('liftes-bot', 'logger_token'))
+            pause()
+        case _:
+            setting()
 
 
 def generate_new_key() -> None:
@@ -148,10 +207,11 @@ def telegram_token_setting() -> None:
 
 
 def create_bd() -> None:
-    python_execute('main.py --create_table')
+    create_error_logging_table()
+    create_table()
 
 
-def api_setting() -> None:
+def server_api_setting() -> None:
     while True:
         sub_menu = inquirer.select(
             message="Выберите пункт",
@@ -206,28 +266,31 @@ def api_setting() -> None:
 
 
 def main() -> None:
-    clear()
     try:
-        menu = inquirer.select(
-            message="Выберите опцию",
-            choices=[
-                "Запуск бота",
-                "Настройки",
-                "Выход",
-            ],
-        ).execute()
-
-        match menu:
-            case "Запуск бота":
-                python_execute('main.py --start_bot')
-            case "Настройки":
-                setting()
-            case _:
-                sys.exit()
-
-    except KeyboardInterrupt:
         clear()
-        logger.error("экстренное закрытие программы")
+        try:
+            menu = inquirer.select(
+                message="Выберите опцию",
+                choices=[
+                    "Запуск бота",
+                    "Настройки",
+                    "Выход",
+                ],
+            ).execute()
+
+            match menu:
+                case "Запуск бота":
+                    threading.Thread(target=python_execute('main.py --start_bot'), daemon=True).start()
+                case "Настройки":
+                    setting()
+                case _:
+                    sys.exit()
+
+        except KeyboardInterrupt:
+            clear()
+            logger.error("экстренное закрытие программы")
+    except Exception as exc:
+        error_logging(exc)
 
 
 if __name__ == '__main__':

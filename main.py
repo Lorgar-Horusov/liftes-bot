@@ -1,4 +1,3 @@
-import sqlite3
 import argparse
 import logging
 import sys
@@ -6,12 +5,8 @@ import sys
 import keyring
 
 from user_request import ClientInfo
-from nacl.hash import blake2b
-from nacl.encoding import HexEncoder
-from nacl.secret import SecretBox
-from nacl.utils import random
-from keyring import errors
 
+from database import user_check, get_user_phone, add_new_user, create_table, generate_new_key, error_logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, \
     ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, \
@@ -22,101 +17,18 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('OwO logger')
 
 
-def create_table() -> None:
-    db = sqlite3.connect('users.db')
-    cursor = db.cursor()
-    try:
-        logger.info('creating table...')
-        cursor.execute("""CREATE TABLE IF NOT EXISTS users (telegram_chat_id TEXT, phone_number TEXT)""")
-        db.commit()
-        db.close()
-        logger.info('table created')
-    except Exception as e:
-        logger.error(f'Error creating table: {e}')
-    finally:
-        db.close()
-
-
-def generate_new_key() -> None:
-    attempts = 5
-
-    while attempts > 0:
-        confirm = input('Are you sure you want to generate a new salt? '
-                        'This will cause the database to become inaccessible y/n: ')
-        if confirm.lower() == 'y':
-            key = random(SecretBox.KEY_SIZE)
-            keyring.set_password('liftes_bot', 'key', key.hex())
-            logger.info('ключ сгенерирован и сохранен')
-            logger.info(keyring.get_password('liftes_bot', 'key'))
-            break
-        elif confirm.lower() == 'n':
-            sys.exit("Operation canceled by user.")
-        else:
-            attempts -= 1
-            print(f"Invalid input. Please enter 'y' for yes or 'n' for no.\nAttempts left: {attempts}")
-
-        if attempts == 0:
-            logger.error("Maximum attempts reached. Exiting program.")
-            sys.exit("Maximum attempts reached. Exiting program.")
-
-
-def add_new_user(telegram_id: str, user_phone: str) -> None:
-    key = keyring.get_password('liftes_bot', 'key')
-    box = SecretBox(bytes.fromhex(key))
-    user_id = telegram_id
-    hex_user_id = blake2b(user_id.encode('utf-8'), encoder=HexEncoder).decode('utf-8')
-    encrypted_user_number = box.encrypt(user_phone.encode('utf-8')).hex()
-    with sqlite3.connect('users.db') as db:
-        cursor = db.cursor()
-        cursor.execute("INSERT INTO users VALUES (?, ?)", (hex_user_id, encrypted_user_number))
-        db.commit()
-
-
-def get_user_phone(telegram_id: str) -> str | None:
-    try:
-        key = keyring.get_password('liftes_bot', 'key')
-    except keyring.errors.KeyringError as e:
-        logger.error(e)
-        return None
-
-    box = SecretBox(bytes.fromhex(key))
-    user_id = telegram_id
-    hex_user_id = blake2b(user_id.encode('utf-8'), encoder=HexEncoder).decode('utf-8')
-    db = sqlite3.connect('users.db')
-    cursor = db.cursor()
-    cursor.execute("SELECT phone_number FROM users WHERE telegram_chat_id =?", (hex_user_id,))
-    row = cursor.fetchone()
-    db.close()
-
-    if row is None:
-        logger.info("Пользователь с таким ID не найден в базе данных")
-        return None
-
-    encrypted_phone_number = bytes.fromhex(row[0])
-    phone_number = box.decrypt(encrypted_phone_number).decode('utf-8')
-    return phone_number
-
-
-def user_check(telegram_id: str) -> bool:
-    user_id = telegram_id
-    hex_user_id = blake2b(user_id.encode('utf-8'), encoder=HexEncoder).decode('utf-8')
-    db = sqlite3.connect('users.db')
-    cursor = db.cursor()
-    cursor.execute("SELECT EXISTS (SELECT 1 FROM users WHERE telegram_chat_id =?)", (hex_user_id,))
-    result = cursor.fetchone()[0]
-    db.close()
-    return result
-
-
 async def start(update: Update, context: CallbackContext) -> None:
-    if not user_check(str(update.effective_chat.id)):
-        keyboard = [
-            [KeyboardButton("Отправить номер телефона", request_contact=True)]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        await context.bot.send_message(chat_id=update.effective_chat.id,
-                                       text='Пожалуйста, отправьте ваш номер телефона.',
-                                       reply_markup=reply_markup)
+    try:
+        if not user_check(str(update.effective_chat.id)):
+            keyboard = [
+                [KeyboardButton("Отправить номер телефона", request_contact=True)]
+            ]
+            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            await context.bot.send_message(chat_id=update.effective_chat.id,
+                                           text='Пожалуйста, отправьте ваш номер телефона.',
+                                           reply_markup=reply_markup)
+    except Exception as e:
+        error_logging(e)
 
     else:
         await show_main_menu(update, context)
@@ -156,7 +68,8 @@ async def button_handler(update: Update, context: CallbackContext) -> None:
                                                text=f'ваш адрес \n{client_info.address}')
             else:
                 await context.bot.send_message(chat_id=update.effective_chat.id,
-                                               text='Вашего адреса нет в базе данных, пожалуйста отправьте адрес\n(coming soon)')
+                                               text='Вашего адреса нет в базе данных, пожалуйста отправьте адрес\n'
+                                                    '(coming soon)')
         else:
             await context.bot.send_message(chat_id=update.effective_chat.id,
                                            text='Пользователь с таким ID не найден в базе данных')
